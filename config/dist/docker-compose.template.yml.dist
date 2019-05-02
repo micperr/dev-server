@@ -1,0 +1,137 @@
+version: '3.7'
+services:
+    nginx-proxy:
+        build: ./containers/nginx-proxy
+        image: localhost_nginx-proxy
+        container_name: localhost_nginx-proxy_c
+        restart: always
+        networks: [server]
+        ports:
+            - 80:80
+        depends_on:
+            - nginx
+            - php
+
+    nginx:
+        build: ./containers/nginx
+        image: localhost_nginx
+        container_name: localhost_nginx_c
+        restart: always
+        networks: [server]
+        working_dir: ${SERVER_WORK_DIR}
+        volumes: '%VOLUMES%' # Autofilled by configure_sites.py
+        environment: []
+        depends_on:
+            - php
+
+    php:
+        build:
+            context: ./containers/php
+            args:
+                USER_ID: ${SERVER_USER_ID}
+                GROUP_ID: ${SERVER_GROUP_ID}
+                WORK_DIR: ${SERVER_WORK_DIR}
+        image: localhost_php
+        container_name: localhost_php_c
+        restart: always
+        networks: [server]
+        working_dir: ${SERVER_WORK_DIR}
+        expose:
+            - 9000
+        volumes: '%VOLUMES%' # Autofilled by configure_sites.py
+        depends_on:
+            - mysql
+            - postgresql
+
+    mysql:
+        build: ./containers/mysql
+        image: localhost_mysql
+        container_name: localhost_mysql_c
+        restart: always
+        networks:
+            server:
+                ipv4_address: 172.28.0.10
+        volumes:
+            - vol_mysql:/var/lib/mysql
+        ports:
+            - 3306:3306
+        env_file: config/.env
+
+    postgresql:
+        build: ./containers/postgresql
+        image: localhost_postgresql
+        container_name: localhost_postgresql_c
+        restart: always
+        networks:
+            server:
+                ipv4_address: 172.28.0.11
+        volumes:
+            - vol_postgresql:/var/lib/postgresql/data
+        env_file: config/.env
+
+    adminer:
+        image: adminer:latest
+        container_name: localhost_adminer_c
+        restart: always
+        networks: [server]
+        ports:
+            - 8080
+        environment:
+            ADMINER_DESIGN: hever
+        depends_on:
+            - mysql
+            - postgresql
+
+    redis:
+        image: redis:latest
+        container_name: localhost_redis_c
+        restart: always
+        networks:
+            server:
+                ipv4_address: 172.28.0.12
+        ports:
+            - 6379
+
+    rabbitmq:
+        image: rabbitmq:3.7.14-management
+        container_name: localhost_rabbitmq_c
+        restart: unless-stopped
+        networks:
+            server:
+                ipv4_address: 172.28.0.13
+        ports:
+            - 5630:5672
+            - 15630:15672
+        env_file:
+            - config/.env
+
+    eventstore:
+        image: eventstore/eventstore
+        container_name: localhost_eventstore_c
+        restart: unless-stopped
+        networks:
+            server:
+                ipv4_address: 172.28.0.14
+        ports:
+            - 2113:2113
+            - 1113:1113
+
+volumes:
+    vol_mysql:
+        name: mysql
+    vol_postgresql:
+        name: postgresql
+    nfsmount: # Used on MacOS to improve performance
+        name: nfsmount
+        driver: local
+        driver_opts:
+            type: nfs
+            o: addr=host.docker.internal,rw,nolock,hard,nointr,nfsvers=3
+            device: ":${SERVER_MOUNT_DIR}"
+networks:
+    server:
+        name: localhost
+        ipam:
+            driver: default
+            config:
+                - subnet: 172.28.0.0/16

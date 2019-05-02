@@ -1,0 +1,21 @@
+#!/bin/sh
+
+if [[ $1 == '--noninteractive' ]]; then
+    interactive=
+    shift
+else
+    interactive='-i'
+fi
+
+docker run \
+    --rm \
+    --tty \
+    ${interactive} \
+    --user      $(id -u):$(id -g) \
+    --name      php-cli \
+    --network   localhost \
+    --volume    $PWD:$PWD \
+    --workdir   $PWD \
+    localhost_php php "$@"
+
+exit $?

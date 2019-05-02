@@ -1,0 +1,14 @@
+#!/bin/sh
+
+docker run \
+    --rm \
+    --tty \
+    --interactive \
+    --user      $(id -u):$(id -g) \
+    --network   localhost \
+    --volume    $PWD:/app \
+    --volume    /etc/passwd:/etc/passwd:ro \
+    --volume    /etc/group:/etc/group:ro \
+    composer "$@"
+
+exit $?

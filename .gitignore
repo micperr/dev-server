@@ -1,0 +1,16 @@
+/.idea/
+/.vscode/
+__pycache__/
+.DS_Store
+/.venv/
+/tmp/
+
+.env
+config/docker-compose.yml
+config/docker-compose.template.yml
+config/sites.yml
+containers/mysql/sql/*
+containers/postgresql/sql/*
+
+containers/nginx/conf.d/sites.conf
+containers/nginx-proxy/conf.d/1.proxy.conf
