@@ -43,6 +43,19 @@ services:
             - mysql
             - postgresql
 
+    phpzts:
+        build:
+            context: ./containers/phpzts
+            args:
+                WORK_DIR: ${SERVER_WORK_DIR}
+        image: php:7.3.5-zts
+        container_name: localhost_phpzts_c
+        networks: [server]
+        working_dir: ${SERVER_WORK_DIR}
+        expose:
+            - 9001
+        volumes: '%VOLUMES%' # Autofilled by configure_sites.py
+
     mysql:
         build: ./containers/mysql
         image: localhost_mysql
