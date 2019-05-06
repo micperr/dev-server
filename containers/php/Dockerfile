@@ -1,4 +1,4 @@
-FROM php:7.2.17-fpm
+FROM php:7.3.5-fpm
 
 ARG USER_ID
 ARG GROUP_ID
@@ -91,4 +91,8 @@ RUN rm -r ${WORK_DIR}/html
 COPY php.ini /usr/local/etc/php/
 WORKDIR ${WORK_DIR}
 ENV HOME=${WORK_DIR}
+RUN echo '<?php phpinfo(); ?>' > /phpinfo.php
 USER www-data
+
+
+

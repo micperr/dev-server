@@ -5,11 +5,10 @@ import os
 import platform
 import sys
 import subprocess
-
 import dotenv
 from colorama import Fore, Style
 from ruamel import yaml
-import paths as p
+import nginx
 
 
 def load_envs():
@@ -22,6 +21,8 @@ def setenv(key, val):
 
 
 def run(args):
+
+
     load_envs()
     check_required_files_presence()
     cmd = args.command
@@ -43,6 +44,18 @@ def run(args):
 
     elif not is_built():
         print_error('Server has not been built. Please run `build` command first.')
+
+    if cmd == 'sites':
+        # with open(NGINX_PROXIES_CONF) as f:
+        #     for line in f:
+        #         if 'server_name' in line:
+        #             print(line.strip().replace('server_name', '').replace(';', '').strip())
+
+        c = nginx.loadf(NGINX_PROXIES_CONF)
+        for conf in c.as_dict['conf']:
+            print(conf['server'][0]['server_name'])
+
+        sys.exit(0)
 
     if cmd == 'status':
         run_docker_command('container ls --filter network=localhost '
@@ -112,11 +125,10 @@ def run_docker_compose_command(cmd):
     subprocess.run([cmd], shell=True)
 
 
-def save_nginx_config(mount_dir, volume_dir, domain):
+def save_nginx_config(mount_dir, volume_dir, domain_suffix):
     """
     Read sites provided by the user and generate conf files for both nginx reversed proxy and nginx behind it
     """
-    domains = []
     sites = read_yaml(SITES)
     nginx_proxy_config = ''
     nginx_sites_config = ''
@@ -136,11 +148,9 @@ def save_nginx_config(mount_dir, volume_dir, domain):
                 continue
 
             domain = (
-                f"{site}{domain}" if domain[0] == '.'
-                else f"{site}.{domain}"
+                f"{site}{domain_suffix}" if domain_suffix[0] == '.'
+                else f"{site}.{domain_suffix}"
             )
-
-            domains.append(domain)
 
             with open(NGINX_PROXY_SITE_TPL) as tpl:
                 nginx_proxy_config += tpl.read().replace('{$DOMAIN}', domain) + '\n'
@@ -268,6 +278,7 @@ def parse_args():
     cmd_configure = sub.add_parser('configure', description='Generate config files and exit')
     cmd_up = sub.add_parser('up', formatter_class=WideFormatter)
     cmd_restart = sub.add_parser('restart')
+    cmd_sites = sub.add_parser('sites', description='Show mounted site domains.')
 
     cmd_stop = sub.add_parser('stop')
     cmd_down = sub.add_parser('down')
@@ -327,7 +338,6 @@ class WideFormatter(argparse.HelpFormatter):
 
 
 if __name__ == '__main__':
-
     ROOT = sys.path[0]
     ENV = ROOT + '/config/.env'
     SITES = ROOT + '/config/sites.yml'
@@ -338,7 +348,7 @@ if __name__ == '__main__':
     NGINX_SITE_TPL = ROOT + '/containers/nginx/_site.conf.tpl'
     NGINX_SITES_CONF = ROOT + '/containers/nginx/conf.d/sites.conf'
     VALID_CONF_TYPES = [sitetype[:-5] for sitetype in os.listdir(ROOT + '/containers/nginx/conf.d/sitetypes')]
-    
+
     run(
         parse_args()
     )
