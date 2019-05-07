@@ -21,10 +21,8 @@ def setenv(key, val):
 
 
 def run(args):
-
-
     load_envs()
-    check_required_files_presence()
+    validate()
     cmd = args.command
 
     # BUILD
@@ -221,7 +219,7 @@ def save_docker_composer_config(mount_dir, volume_dir, containers_whitelist=None
     )
 
 
-def check_required_files_presence():
+def validate():
     all_required_files_exist = True
     for filepath in [DOCKER_COMPOSE_TPL, SITES, ENV]:
         if not os.path.exists(filepath):

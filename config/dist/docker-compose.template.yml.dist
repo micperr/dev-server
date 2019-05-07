@@ -51,7 +51,6 @@ services:
         image: localhost_phpzts
         container_name: localhost_phpzts_c
         networks: [server]
-        working_dir: ${SERVER_WORK_DIR}
         expose:
             - 9001
         volumes: '%VOLUMES%' # Autofilled by configure_sites.py
