@@ -48,7 +48,7 @@ services:
             context: ./containers/phpzts
             args:
                 WORK_DIR: ${SERVER_WORK_DIR}
-        image: php:7.3.5-zts
+        image: localhost_phpzts
         container_name: localhost_phpzts_c
         networks: [server]
         working_dir: ${SERVER_WORK_DIR}
