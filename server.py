@@ -10,6 +10,17 @@ from colorama import Fore, Style
 from ruamel import yaml
 import nginx
 
+ENVS_REQUIRED = [
+    'SERVER_WORKSPACE_DIR',
+    'SERVER_DOMAIN_SUFFIX',
+    'MYSQL_ROOT_PASSWORD',
+    'POSTGRES_PASSWORD',
+    'RABBITMQ_DEFAULT_USER',
+    'RABBITMQ_DEFAULT_PASS'
+]
+
+ENVS_AUTOBUILD = ['SERVER_USER_ID', 'SERVER_GROUP_ID']
+
 
 def load_envs():
     dotenv.load_dotenv(ENV)
@@ -27,43 +38,33 @@ def run(args):
 
     # BUILD
     if cmd == 'build':
-
-        def rstripslash(v):
-            return v[:-1] if v.endswith('/') else v
-
         setenv('SERVER_USER_ID', str(os.getuid()))
         setenv('SERVER_GROUP_ID', str(os.getgid()))
-        setenv('SERVER_MOUNT_DIR', rstripslash(args.mount))
-        setenv('SERVER_WORK_DIR', rstripslash(args.volume))
-        setenv('SERVER_DOMAIN', args.domain)
         produce_config_files(args)
         run_docker_compose_command('build')
         print_success('Build has been completed.')
-
     elif not is_built():
-        print_error('Server has not been built. Please run `build` command first.')
+        print_error('Server has not been built. Please run `make build` or `server build`.')
 
     if cmd == 'sites':
-        # with open(NGINX_PROXIES_CONF) as f:
-        #     for line in f:
-        #         if 'server_name' in line:
-        #             print(line.strip().replace('server_name', '').replace(';', '').strip())
-
         c = nginx.loadf(NGINX_PROXIES_CONF)
         for conf in c.as_dict['conf']:
             print(conf['server'][0]['server_name'])
-
         sys.exit(0)
 
+    ipcmd = "ps -q --filter network=localhost | xargs docker inspect --format '{{.Name}}\n {{ " \
+            ".NetworkSettings.Networks.localhost.IPAddress }}\n' | sed 's#^/##' "
     if cmd == 'status':
         run_docker_command('container ls --filter network=localhost '
                            '--format "table {{.Names}}\t{{.Ports}}\t{{.Status}} "')
 
         if args.ip:
-            run_docker_command(
-                "ps -q --filter network=localhost | xargs docker inspect --format '{{.Name}}\n"
-                "{{ .NetworkSettings.Networks.localhost.IPAddress }}\n' | sed 's#^/##'"
-            )
+            run_docker_command(ipcmd)
+
+        sys.exit(0)
+
+    if cmd == 'ip':
+        run_docker_command(ipcmd)
         sys.exit(0)
 
     produce_config_files(args)
@@ -78,11 +79,11 @@ def run(args):
         print_success('Server config has been updated.')
 
     # STOP
-    if cmd == 'stop' or cmd == 'restart':
+    if cmd in ('stop', 'restart'):
         run_docker_compose_command('stop')
 
     # UP / RESTART
-    if cmd == 'up' or cmd == 'restart':
+    if cmd in ('up', 'restart'):
         run_docker_compose_command('up -d')
 
     if cmd == 'refresh':
@@ -96,22 +97,45 @@ def run(args):
 
 
 def is_built():
-    return all([
-        os.getenv('SERVER_MOUNT_DIR') is not None,
-        os.getenv('SERVER_WORK_DIR') is not None,
-        os.getenv('SERVER_DOMAIN') is not None
-    ])
+    return all(
+        [bool(os.getenv(c)) for c in ENVS_AUTOBUILD]
+    )
+
+
+def are_envs_provided():
+    return all(
+        [bool(os.getenv(c)) for c in ENVS_REQUIRED]
+    )
+
+
+def get_missing_envs():
+    return [c for c in ENVS_REQUIRED if not os.getenv(c)]
+
+
+def validate():
+    if not are_envs_provided():
+        miss = ', '.join(get_missing_envs())
+        print_error(f'Missing mandatory configuration values in .env file: {miss}')
+
+    all_required_files_exist = True
+    for filepath in [DOCKER_COMPOSE_TPL, SITES, ENV]:
+        if not os.path.exists(filepath):
+            print_error(f"{filepath} does not exist.", False)
+            all_required_files_exist = False
+
+    if not all_required_files_exist:
+        print_msg("Rune `make install` to fix this.")
 
 
 def produce_config_files(args):
     containers_whitelist = args.c if args.command == 'refresh' and args.c else None
-    mount_dir, volume_dir, domain = get_env_configs()
-    save_docker_composer_config(mount_dir, volume_dir, containers_whitelist)
-    save_nginx_config(mount_dir, volume_dir, domain)
+    workspace_dir, domain = get_server_env_configs()
+    save_docker_composer_config(workspace_dir, containers_whitelist)
+    save_nginx_config(workspace_dir, domain)
 
 
-def get_env_configs():
-    return os.getenv('SERVER_MOUNT_DIR'), os.getenv('SERVER_WORK_DIR'), os.getenv('SERVER_DOMAIN')
+def get_server_env_configs():
+    return os.getenv('SERVER_WORKSPACE_DIR'), os.getenv('SERVER_DOMAIN_SUFFIX')
 
 
 def run_docker_command(cmd):
@@ -123,9 +147,10 @@ def run_docker_compose_command(cmd):
     subprocess.run([cmd], shell=True)
 
 
-def save_nginx_config(mount_dir, volume_dir, domain_suffix):
+def save_nginx_config(workspace_dir, domain_suffix):
     """
-    Read sites provided by the user and generate conf files for both nginx reversed proxy and nginx behind it
+    Read sites provided by the user and generate conf files
+    for both nginx reversed proxy and nginx behind it
     """
     sites = read_yaml(SITES)
     nginx_proxy_config = ''
@@ -135,10 +160,9 @@ def save_nginx_config(mount_dir, volume_dir, domain_suffix):
 
         webpath = settings['webpath']
         sitetype = settings['type']
-        site_webpath_mount = f"{mount_dir}/{site}/{webpath}"
-        site_webpath_volume = f"{volume_dir}/{site}/{webpath}"
+        site_webpath_dir = f"{workspace_dir}/{site}/{webpath}"
 
-        if os.path.exists(site_webpath_mount):
+        if os.path.exists(site_webpath_dir):
 
             # NGINX servers
             if sitetype not in VALID_CONF_TYPES:
@@ -158,7 +182,7 @@ def save_nginx_config(mount_dir, volume_dir, domain_suffix):
 
                 replace_it = (
                     ("{$SITE_TYPE}", sitetype),
-                    ("{$WEB_PATH}", site_webpath_volume),
+                    ("{$WEB_PATH}", site_webpath_dir),
                     ("{$SERVER_NAME}", f"{domain} www.{domain}"),
                     ("{$LOG_FILE}", site),
                 )
@@ -168,7 +192,7 @@ def save_nginx_config(mount_dir, volume_dir, domain_suffix):
 
                 nginx_sites_config += tpl + '\n'
         else:
-            print_warning(f'Project directory "{site_webpath_mount}" doesnt\'t exist. Skipping...')
+            print_warning(f'Project directory "{site_webpath_dir}" doesnt\'t exist. Skipping...')
 
     with open(NGINX_PROXIES_CONF, 'w') as f:
         f.write(nginx_proxy_config)
@@ -177,23 +201,21 @@ def save_nginx_config(mount_dir, volume_dir, domain_suffix):
         f.write(nginx_sites_config)
 
 
-def save_docker_composer_config(mount_dir, volume_dir, containers_whitelist=None):
+def save_docker_composer_config(workspace_dir, containers_whitelist=None):
     """
     Retrieve docker-compose content and bind volumes
     """
     docker_compose_conf = read_yaml(DOCKER_COMPOSE_TPL)
     volume = (
-        f"nfsmount:{volume_dir}" if platform.system() == 'Darwin'
-        else f"{mount_dir}:{volume_dir}"
+        f"nfsmount:{workspace_dir}" if platform.system() == 'Darwin'
+        else f"{workspace_dir}:{workspace_dir}"
     )
 
-    for servicename, config in docker_compose_conf['services'].items():
+    for config in docker_compose_conf['services'].values():
         if 'volumes' in config and config['volumes'] == '%VOLUMES%':
             config['volumes'] = [volume]
 
-    """
-    Selective build
-    """
+    # Selective build
     if containers_whitelist is not None:
         to_keep = containers_whitelist
         to_remove = []
@@ -219,17 +241,6 @@ def save_docker_composer_config(mount_dir, volume_dir, containers_whitelist=None
     )
 
 
-def validate():
-    all_required_files_exist = True
-    for filepath in [DOCKER_COMPOSE_TPL, SITES, ENV]:
-        if not os.path.exists(filepath):
-            print_error(f"{filepath} does not exist.", False)
-            all_required_files_exist = False
-
-    if not all_required_files_exist:
-        print_error("Rune `make` to fix this.")
-
-
 def get_available_services():
     dockcom = read_yaml(DOCKER_COMPOSE_TPL)
     return list(dockcom['services'].keys())
@@ -250,20 +261,22 @@ def dump_yaml(yamlfile, data):
                   block_seq_indent=4)
 
 
-def print_error(msg, _exit=True):
-    print(Fore.RED + msg + Style.RESET_ALL)
+def print_msg(msg, color=Fore.WHITE, _exit=True, exitcode=1):
+    print(color + msg + Style.RESET_ALL)
     if _exit:
-        sys.exit(1)
+        sys.exit(exitcode)
 
 
-def print_warning(msg):
-    print(Fore.YELLOW + msg + Style.RESET_ALL)
+def print_error(msg, _exit=True, exitcode=1):
+    print_msg(msg, Fore.RED, _exit, exitcode)
 
 
-def print_success(msg, _exit=True):
-    print(Fore.GREEN + msg + Style.RESET_ALL)
-    if _exit:
-        sys.exit(0)
+def print_warning(msg, _exit=True, exitcode=1):
+    print_msg(msg, Fore.YELLOW, _exit, exitcode)
+
+
+def print_success(msg, _exit=True, exitcode=0):
+    print_msg(msg, Fore.GREEN, _exit, exitcode)
 
 
 def parse_args():
@@ -283,6 +296,7 @@ def parse_args():
     cmd_prune = sub.add_parser('prune')
     cmd_status = sub.add_parser('status')
     cmd_status.add_argument('--ip', help='Show IPs too', action='store_true')
+    cmd_ip = sub.add_parser('ip')
 
     # Commands with build refresh possible
     cmd_refresh = sub.add_parser('refresh', description='Refresh (rebuild) containers. Useful after container\'s '
@@ -304,23 +318,17 @@ def parse_args():
     cmd_prune.add_argument('--volumes', action='store_true', help='Prune volumes too')
 
     # Build command
-    cmd_build.add_argument(
-        '--mount',
-        required=True,
-        type=str,
-        help='Local workspace mount path')
+    # cmd_build.add_argument(
+    #     '--workspace-dir',
+    #     required=True,
+    #     type=str,
+    #     help='Workspace mount path for volume (this path remains identical inside docker\'s container).')
 
-    cmd_build.add_argument(
-        '--volume',
-        required=True,
-        type=str,
-        help='Docker workspace volume path')
-
-    cmd_build.add_argument(
-        '--domain',
-        type=str,
-        default="localhost",
-        help='Url domain suffix. Defaults to ".localhost"')
+    # cmd_build.add_argument(
+    #     '--domain-suffix',
+    #     type=str,
+    #     default="localhost",
+    #     help='Url domain suffix. Defaults to ".localhost"')
 
     return parser.parse_args()
 
@@ -337,7 +345,7 @@ class WideFormatter(argparse.HelpFormatter):
 
 if __name__ == '__main__':
     ROOT = sys.path[0]
-    ENV = ROOT + '/config/.env'
+    ENV = ROOT + '/.env'
     SITES = ROOT + '/config/sites.yml'
     DOCKER_COMPOSE = ROOT + '/config/docker-compose.yml'
     DOCKER_COMPOSE_TPL = ROOT + '/config/docker-compose.template.yml'
@@ -345,7 +353,9 @@ if __name__ == '__main__':
     NGINX_PROXIES_CONF = ROOT + '/containers/nginx-proxy/conf.d/1.proxy.conf'
     NGINX_SITE_TPL = ROOT + '/containers/nginx/_site.conf.tpl'
     NGINX_SITES_CONF = ROOT + '/containers/nginx/conf.d/sites.conf'
-    VALID_CONF_TYPES = [sitetype[:-5] for sitetype in os.listdir(ROOT + '/containers/nginx/conf.d/sitetypes')]
+    VALID_CONF_TYPES = [
+        sitetype[:-5] for sitetype in os.listdir(ROOT + '/containers/nginx/conf.d/sitetypes')
+    ]
 
     run(
         parse_args()

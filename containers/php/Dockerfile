@@ -35,10 +35,26 @@ RUN docker-php-ext-install -j$(nproc) \
     sockets \
     zip
 
+RUN git clone https://github.com/allegro/php-protobuf /tmp/protobuf \
+        && cd /tmp/protobuf \
+        && git checkout v0.12.3 \
+        && phpize \
+        && ./configure \
+        && make \
+        && make install
+
+RUN docker-php-ext-configure /tmp/protobuf
+RUN docker-php-ext-install /tmp/protobuf
+RUN docker-php-ext-enable protobuf
+
 # Pecl packages
-RUN pecl install xdebug-2.7.1 amqp redis && rm -rf /tmp/pear
+RUN pecl install xdebug-2.7.1 amqp redis
 RUN docker-php-ext-enable amqp
 RUN docker-php-ext-enable redis
+
+
+RUN apt-get autoremove -y
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Node & npm
 # RUN curl -sL https://deb.nodesource.com/setup_8.x | bash
@@ -87,11 +103,9 @@ RUN if [ ${USER_ID} -ne 0 ] && [ ${GROUP_ID} -ne 0 ]; then \
 ;fi
 
 
-RUN rm -r ${WORK_DIR}/html
+RUN rm -r /var/www
+# RUN rm -r ${WORK_DIR}/html
 COPY php.ini /usr/local/etc/php/
 ENV HOME=${WORK_DIR}
 RUN echo '<?php phpinfo(); ?>' > /phpinfo.php
 USER www-data
-
-
-
