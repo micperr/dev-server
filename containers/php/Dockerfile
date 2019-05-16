@@ -71,18 +71,18 @@ RUN install -d -m 0755 -o www-data -g www-data /.composer && \
 
 # PHPUnit
 ### 6
-RUN curl -L -o phpunit6 https://phar.phpunit.de/phpunit-6.phar
-RUN chmod +x phpunit6
-RUN mv phpunit6 /usr/local/bin/phpunit6
+# RUN curl -L -o phpunit6 https://phar.phpunit.de/phpunit-6.phar
+# RUN chmod +x phpunit6
+# RUN mv phpunit6 /usr/local/bin/phpunit6
 ### 7
-RUN curl -L -o phpunit7 https://phar.phpunit.de/phpunit-7.phar
-RUN chmod +x phpunit7
-RUN cp phpunit7 /usr/local/bin/phpunit
-RUN mv phpunit7 /usr/local/bin/phpunit7
+# RUN curl -L -o phpunit7 https://phar.phpunit.de/phpunit-7.phar
+# RUN chmod +x phpunit7
+# RUN cp phpunit7 /usr/local/bin/phpunit
+# RUN mv phpunit7 /usr/local/bin/phpunit7
 ### 8
-RUN curl -L -o phpunit8 https://phar.phpunit.de/phpunit-8.phar
-RUN chmod +x phpunit8
-RUN mv phpunit8 /usr/local/bin/phpunit8
+# RUN curl -L -o phpunit8 https://phar.phpunit.de/phpunit-8.phar
+# RUN chmod +x phpunit8
+# RUN mv phpunit8 /usr/local/bin/phpunit8
 
 
 # Recreate www-data user and group and assign same IDs as the current host user has
