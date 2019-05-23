@@ -6,6 +6,7 @@ import platform
 import sys
 import subprocess
 import dotenv
+from pathlib import Path
 from colorama import Fore, Style
 from ruamel import yaml
 import nginx
@@ -32,8 +33,6 @@ def setenv(key, val):
 
 
 def run(args):
-    load_envs()
-    validate()
     cmd = args.command
 
     # BUILD
@@ -113,18 +112,21 @@ def get_missing_envs():
 
 
 def validate():
+    all_dist_files_exist = True
+    for filepath in [DOCKER_COMPOSE_TPL, ENV]:
+        if not os.path.exists(filepath):
+            print_error(f"{filepath} does not exist.", False)
+            all_dist_files_exist = False
+
+    if not all_dist_files_exist:
+        print_msg("Rune `make install` to fix this.")
+
     if not are_envs_provided():
         miss = ', '.join(get_missing_envs())
         print_error(f'Missing mandatory configuration values in .env file: {miss}')
 
-    all_required_files_exist = True
-    for filepath in [DOCKER_COMPOSE_TPL, SITES, ENV]:
-        if not os.path.exists(filepath):
-            print_error(f"{filepath} does not exist.", False)
-            all_required_files_exist = False
-
-    if not all_required_files_exist:
-        print_msg("Rune `make install` to fix this.")
+    if not os.path.exists(SITES):
+        print_error(f"{SITES} does not exist.")
 
 
 def produce_config_files(args):
@@ -344,9 +346,11 @@ class WideFormatter(argparse.HelpFormatter):
 
 
 if __name__ == '__main__':
+
     ROOT = sys.path[0]
     ENV = ROOT + '/.env'
-    SITES = ROOT + '/config/sites.yml'
+    load_envs()
+
     DOCKER_COMPOSE = ROOT + '/config/docker-compose.yml'
     DOCKER_COMPOSE_TPL = ROOT + '/config/docker-compose.template.yml'
     NGINX_PROXY_SITE_TPL = ROOT + '/containers/nginx-proxy/_proxy.conf.tpl'
@@ -356,6 +360,10 @@ if __name__ == '__main__':
     VALID_CONF_TYPES = [
         sitetype[:-5] for sitetype in os.listdir(ROOT + '/containers/nginx/conf.d/sitetypes')
     ]
+
+    SITES = os.getenv('SERVER_WORKSPACE_DIR', default='') + '/sites.yml'
+
+    validate()
 
     run(
         parse_args()
