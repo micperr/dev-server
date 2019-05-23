@@ -61,6 +61,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 # RUN apt-get install -y nodejs
 
 # Composer
+RUN mkdir /.composer && echo "{}" > /.composer/composer.json
 ENV COMPOSER_HOME /.composer
 RUN install -d -m 0755 -o www-data -g www-data /.composer && \
     curl -sS https://getcomposer.org/installer | \

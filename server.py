@@ -166,7 +166,7 @@ def save_nginx_config(workspace_dir, domain_suffix):
 
             # NGINX servers
             if sitetype not in VALID_CONF_TYPES:
-                print_warning(f"Invalid site type '{sitetype}'. Skipping...")
+                print_warning(f"Invalid site type '{sitetype}'. Skipping...", _exit=False)
                 continue
 
             domain = (
@@ -192,7 +192,7 @@ def save_nginx_config(workspace_dir, domain_suffix):
 
                 nginx_sites_config += tpl + '\n'
         else:
-            print_warning(f'Project directory "{site_webpath_dir}" doesnt\'t exist. Skipping...')
+            print_warning(f'Project directory "{site_webpath_dir}" doesnt\'t exist. Skipping...', _exit=False)
 
     with open(NGINX_PROXIES_CONF, 'w') as f:
         f.write(nginx_proxy_config)
