@@ -6,7 +6,6 @@ import platform
 import sys
 import subprocess
 import dotenv
-from pathlib import Path
 from colorama import Fore, Style
 from ruamel import yaml
 import nginx
@@ -20,7 +19,7 @@ ENVS_REQUIRED = [
     'RABBITMQ_DEFAULT_PASS'
 ]
 
-ENVS_AUTOBUILD = ['SERVER_USER_ID', 'SERVER_GROUP_ID']
+ENVS_AUTOGEN = ['SERVER_USER_ID', 'SERVER_GROUP_ID']
 
 
 def load_envs():
@@ -41,9 +40,9 @@ def run(args):
         setenv('SERVER_GROUP_ID', str(os.getgid()))
         produce_config_files(args)
         run_docker_compose_command('build')
-        print_success('Build has been completed.')
+        print_success('Build has been completed.', _exit=True)
     elif not is_built():
-        print_error('Server has not been built. Please run `make build` or `server build`.')
+        print_error('Server has not been built. Please run `make build` or `server build`.', _exit=True)
 
     if cmd == 'sites':
         c = nginx.loadf(NGINX_PROXIES_CONF)
@@ -71,11 +70,11 @@ def run(args):
     # PRUNE
     if cmd == 'prune':
         run_docker_command('system prune --volumes' if args.volumes else 'system prune')
-        print_success('Server has been pruned.')
+        print_success('Server has been pruned.', _exit=True)
 
     # CONFIGURE
     if cmd == 'configure':
-        print_success('Server config has been updated.')
+        print_success('Server config has been updated.', _exit=True)
 
     # STOP
     if cmd in ('stop', 'restart'):
@@ -97,7 +96,7 @@ def run(args):
 
 def is_built():
     return all(
-        [bool(os.getenv(c)) for c in ENVS_AUTOBUILD]
+        [bool(os.getenv(c)) for c in ENVS_AUTOGEN]
     )
 
 
@@ -115,18 +114,20 @@ def validate():
     all_dist_files_exist = True
     for filepath in [DOCKER_COMPOSE_TPL, ENV]:
         if not os.path.exists(filepath):
-            print_error(f"{filepath} does not exist.", False)
+            print_error(f"{filepath} does not exist.")
             all_dist_files_exist = False
 
     if not all_dist_files_exist:
-        print_msg("Rune `make install` to fix this.")
+        print_msg("Run `make install` to fix this.", _exit=True)
 
     if not are_envs_provided():
         miss = ', '.join(get_missing_envs())
-        print_error(f'Missing mandatory configuration values in .env file: {miss}')
+        print_error(f'Missing mandatory configuration values in .env file: {miss}', _exit=True)
 
     if not os.path.exists(SITES):
-        print_error(f"{SITES} does not exist.")
+        print_error(f"{SITES} does not exist. Please create it and update it according to the following template:")
+        with open(ROOT + '/config/dist/sites.yml.dist') as f:
+            print_info("\n" + f.read(), _exit=True)
 
 
 def produce_config_files(args):
@@ -168,7 +169,7 @@ def save_nginx_config(workspace_dir, domain_suffix):
 
             # NGINX servers
             if sitetype not in VALID_CONF_TYPES:
-                print_warning(f"Invalid site type '{sitetype}'. Skipping...", _exit=False)
+                print_warning(f"Invalid site type '{sitetype}'. Skipping...")
                 continue
 
             domain = (
@@ -194,7 +195,7 @@ def save_nginx_config(workspace_dir, domain_suffix):
 
                 nginx_sites_config += tpl + '\n'
         else:
-            print_warning(f'Project directory "{site_webpath_dir}" doesnt\'t exist. Skipping...', _exit=False)
+            print_warning(f'Project directory "{site_webpath_dir}" doesnt\'t exist. Skipping...')
 
     with open(NGINX_PROXIES_CONF, 'w') as f:
         f.write(nginx_proxy_config)
@@ -263,21 +264,25 @@ def dump_yaml(yamlfile, data):
                   block_seq_indent=4)
 
 
-def print_msg(msg, color=Fore.WHITE, _exit=True, exitcode=1):
+def print_msg(msg, color=Fore.WHITE, _exit=False, exitcode=0):
     print(color + msg + Style.RESET_ALL)
     if _exit:
         sys.exit(exitcode)
 
 
-def print_error(msg, _exit=True, exitcode=1):
+def print_error(msg, _exit=False, exitcode=1):
     print_msg(msg, Fore.RED, _exit, exitcode)
 
 
-def print_warning(msg, _exit=True, exitcode=1):
+def print_warning(msg, _exit=False, exitcode=1):
     print_msg(msg, Fore.YELLOW, _exit, exitcode)
 
 
-def print_success(msg, _exit=True, exitcode=0):
+def print_info(msg, _exit=False, exitcode=0):
+    print_msg(msg, Fore.CYAN, _exit, exitcode)
+
+
+def print_success(msg, _exit=False, exitcode=0):
     print_msg(msg, Fore.GREEN, _exit, exitcode)
 
 
