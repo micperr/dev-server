@@ -366,7 +366,7 @@ if __name__ == '__main__':
         sitetype[:-5] for sitetype in os.listdir(ROOT + '/containers/nginx/conf.d/sitetypes')
     ]
 
-    SITES = os.getenv('SERVER_WORKSPACE_DIR', default='') + '/sites.yml'
+    SITES = os.getenv('SERVER_WORKSPACE_DIR', default='') + '/.sites.yml'
 
     validate()
 

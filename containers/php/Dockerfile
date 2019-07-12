@@ -61,13 +61,15 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 # RUN apt-get install -y nodejs
 
 # Composer
-RUN mkdir /.composer && echo "{}" > /.composer/composer.json
-ENV COMPOSER_HOME /.composer
-RUN install -d -m 0755 -o www-data -g www-data /.composer && \
+ARG COMPOSER_HOME=${WORK_DIR}/.composer
+RUN mkdir -p $COMPOSER_HOME
+# && echo "{}" > $COMPOSER_HOME/composer.json
+ENV COMPOSER_HOME $COMPOSER_HOME
+RUN install -d -m 0755 -o www-data -g www-data $COMPOSER_HOME && \
     curl -sS https://getcomposer.org/installer | \
         php -- --install-dir=/usr/local/bin \
                --filename=composer && \
-        chown -R www-data:www-data /.composer
+        chown -R www-data:www-data $COMPOSER_HOME
 
 
 # PHPUnit
@@ -99,7 +101,7 @@ RUN if [ ${USER_ID} -ne 0 ] && [ ${GROUP_ID} -ne 0 ]; then \
     chown --changes --silent --no-dereference --recursive \
           --from=33:33 ${USER_ID}:${GROUP_ID} \
         ${WORK_DIR} \
-        /.composer \
+        $COMPOSER_HOME \
         /var/log \
 ;fi
 

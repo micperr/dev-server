@@ -8,7 +8,6 @@ __pycache__/
 .env
 config/docker-compose.yml
 config/docker-compose.template.yml
-config/sites.yml
 containers/mysql/sql/*
 containers/postgresql/sql/*
 

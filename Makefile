@@ -11,7 +11,6 @@ venv: ## Install python virtual environment
 dist: dist-exists ## Derive config files from .dist examples
 	test -f .env || cp config/dist/.env.dist .env
 	test -f config/docker-compose.template.yml || cp config/dist/docker-compose.template.yml.dist config/docker-compose.template.yml
-	# test -f config/sites.yml || cp config/dist/sites.yml.dist config/sites.yml
 
 build: ## Build server
 	./.venv/bin/python server.py build
