@@ -1,3 +1,4 @@
-project_directory_name_under_workdir:
-    webpath: public
-    type: standard-php|symfony2.8|symfony4|laravel
+`name1`:
+    path: `project_path`
+    webpath: `public`
+    type: `standard-php|symfony2.8|symfony4|laravel`

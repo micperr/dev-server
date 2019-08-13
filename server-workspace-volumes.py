@@ -152,18 +152,21 @@ def run_docker_compose_command(cmd):
     cmd = f"docker-compose -f {DOCKER_COMPOSE} --project-directory {ROOT} {cmd}"
     subprocess.run([cmd], shell=True)
 
+
 def save_nginx_config(workspace_dir, domain_suffix):
     """
     Read sites provided by the user and generate conf files
     for both nginx reversed proxy and nginx behind it
     """
+    sites = read_yaml(SITES)
     nginx_proxy_config = ''
     nginx_sites_config = ''
 
-    # for sitepath, webpath, sitetype in read_yaml(SITES).values():
-    for sitepath, webpath, sitetype in loop_sites():
+    for site, settings in sites.items():
 
-        site_webpath_dir = f"{workspace_dir}/{sitepath}/{webpath}"
+        webpath = settings['webpath']
+        sitetype = settings['type']
+        site_webpath_dir = f"{workspace_dir}/{site}/{webpath}"
 
         if os.path.exists(site_webpath_dir):
 
@@ -173,8 +176,8 @@ def save_nginx_config(workspace_dir, domain_suffix):
                 continue
 
             domain = (
-                f"{sitepath}{domain_suffix}" if domain_suffix[0] == '.'
-                else f"{sitepath}.{domain_suffix}"
+                f"{site}{domain_suffix}" if domain_suffix[0] == '.'
+                else f"{site}.{domain_suffix}"
             )
 
             with open(NGINX_PROXY_SITE_TPL) as tpl:
@@ -187,7 +190,7 @@ def save_nginx_config(workspace_dir, domain_suffix):
                     ("{$SITE_TYPE}", sitetype),
                     ("{$WEB_PATH}", site_webpath_dir),
                     ("{$SERVER_NAME}", f"{domain} www.{domain}"),
-                    ("{$LOG_FILE}", sitepath),
+                    ("{$LOG_FILE}", site),
                 )
 
                 for s in replace_it:
@@ -204,29 +207,19 @@ def save_nginx_config(workspace_dir, domain_suffix):
         f.write(nginx_sites_config)
 
 
-def loop_sites():
-    for s in read_yaml(SITES).values():
-        yield s['path'], s['webpath'], s['type']
-
-
 def save_docker_composer_config(workspace_dir, containers_whitelist=None):
     """
     Retrieve docker-compose content and bind volumes
     """
     docker_compose_conf = read_yaml(DOCKER_COMPOSE_TPL)
-
-    volumes = []
-    for sitepath, *_ in loop_sites():
-        mount = f"{workspace_dir}/{sitepath}"
-        volume = (
-            f"{mount}:{mount}:cached" if platform.system() == 'Darwin'
-            else f"{mount}:{mount}:cached"
-        )
-        volumes.append(volume)
+    volume = (
+        f"nfsmount:{workspace_dir}" if platform.system() == 'Darwin'
+        else f"{workspace_dir}:{workspace_dir}"
+    )
 
     for config in docker_compose_conf['services'].values():
         if 'volumes' in config and config['volumes'] == '%VOLUMES%':
-            config['volumes'] = volumes
+            config['volumes'] = [volume]
 
     # Selective build
     if containers_whitelist is not None:
