@@ -1,0 +1,94 @@
+###################################################################################################
+FROM php:7-zts
+RUN apt-get update
+RUN apt-get install git libssl-dev libpq-dev libcurl4-openssl-dev -y
+# Install mysqli+opcache+pdo
+RUN docker-php-ext-install mysqli pdo pdo_mysql pdo_pgsql opcache curl
+RUN docker-php-ext-enable mysqli pdo pdo_mysql pdo_pgsql opcache curl
+# Install Redis
+RUN pecl install redis
+RUN docker-php-ext-enable redis
+# Install mongodb
+RUN pecl install mongodb
+RUN docker-php-ext-enable mongodb
+# Install Pthreads
+RUN git clone https://github.com/krakjoe/pthreads -b master /tmp/pthreads
+RUN docker-php-ext-configure /tmp/pthreads --enable-pthreads
+RUN docker-php-ext-install /tmp/pthreads
+#RUN pecl install pthreads
+#RUN docker-php-ext-enable pthreads
+RUN apt-get autoremove -y
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN composer --version
+# Set timezone
+RUN rm /etc/localtime
+RUN ln -s /usr/share/zoneinfo/UTC /etc/localtime
+RUN "date"
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+###################################################################################################
+FROM php:7.2-rc-zts-alpine
+
+ARG APP_USER_USERNAME=app
+
+RUN apk update && apk add --no-cache \
+    sudo bash \
+    g++ make autoconf \
+    libxml2-dev icu-dev curl-dev pcre-dev
+
+RUN adduser -D -s /bin/bash $APP_USER_USERNAME \
+    && addgroup $APP_USER_USERNAME wheel \
+    && echo "$APP_USER_USERNAME:" | chpasswd \
+    && echo -e "# User rules for $APP_USER_USERNAME\n$APP_USER_USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/docker-init
+
+RUN docker-php-ext-install curl
+RUN docker-php-ext-install opcache
+RUN docker-php-ext-install pcntl
+RUN docker-php-ext-install pdo_mysql
+
+RUN curl -sSL https://github.com/krakjoe/pthreads/archive/master.zip -o /tmp/pthreads.zip \
+    && unzip /tmp/pthreads.zip -d /tmp \
+    && cd /tmp/pthreads-* \
+    && phpize \
+    && ./configure \
+    && make \
+    && make install \
+    && rm -rf /tmp/pthreads*
+
+RUN docker-php-ext-enable pthreads
+
+RUN curl -sSL https://github.com/xdebug/xdebug/archive/4ada850.zip -o /tmp/xdebug.zip \
+    && unzip /tmp/xdebug.zip -d /tmp \
+    && cd /tmp/xdebug-* \
+    && phpize \
+    && ./configure \
+    && make \
+    && make install \
+    && rm -rf /tmp/xdebug*
+
+RUN docker-php-ext-enable xdebug \
+    && echo "xdebug.remote_autostart=off" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_connect_back=1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_enable=on" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_port=9000" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_handler=dbgp" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_host=docker.for.mac.localhost" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+RUN mv /etc/profile.d/color_prompt /etc/profile.d/color_prompt.sh \
+    && echo -e "alias egrep='egrep --color=auto'\n\
+alias l='ls -CF'\n\
+alias la='ls -A'\n\
+alias ll='ls -alF'\n\
+alias ls='ls --color=auto'" >> /etc/profile.d/aliases.sh
+
+USER $APP_USER_USERNAME
+
+WORKDIR /home/$APP_USER_USERNAME
+
+ENTRYPOINT ["php"]
+
+CMD ["-i"]
